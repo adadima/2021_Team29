@@ -2,10 +2,11 @@ from dimod import DiscreteQuadraticModel
 from dwave.system import LeapHybridDQMSampler
 from nsp2gc import nsp_to_graph_coloring, adj_to_nodes_and_edges
 from config import API_TOKEN
+from visualize import build_graph, build_compact_graph
 import sys
 
 
-def solve(adj_nodes, adj_edges):
+def solve(adj_nodes, adj_edges, even_dist=False):
 
     dqm = DiscreteQuadraticModel()
 
@@ -18,15 +19,16 @@ def solve(adj_nodes, adj_edges):
     
     shifts_per_nurse = DAYS * SHIFTS // NURSES
     
-    # we should ensure that nurses get assigned a roughly equal amount of work
-    for i in range(NURSES):
-        for index, j in enumerate(adj_nodes):
-            
-            dqm.set_linear_case(j, i, dqm.get_linear_case(j, i) - LAGRANGE*(2*shifts_per_nurse+1))
-            
-            for k_index in range(index+1, len(adj_nodes)):
-                k = adj_nodes[k_index]
-                dqm.set_quadratic_case(j, i, k, i, LAGRANGE*(dqm.get_quadratic_case(j, i, k, i) + 2))
+    if even_dist:
+        # we should ensure that nurses get assigned a roughly equal amount of work
+        for i in range(NURSES):
+            for index, j in enumerate(adj_nodes):
+
+                dqm.set_linear_case(j, i, dqm.get_linear_case(j, i) - LAGRANGE*(2*shifts_per_nurse+1))
+
+                for k_index in range(index+1, len(adj_nodes)):
+                    k = adj_nodes[k_index]
+                    dqm.set_quadratic_case(j, i, k, i, LAGRANGE*(dqm.get_quadratic_case(j, i, k, i) + 2))
     
     # some nurses may hate each other, so we should do out best to not put them in the same shift!
     for d in range(DAYS):
@@ -114,14 +116,19 @@ if __name__ == "__main__":
     
     adj_nodes, adj_edges = adj_to_nodes_and_edges(adj)
     
-    sample, energy = solve(adj_nodes, adj_edges)
+    sample, energy = solve(adj_nodes, adj_edges, even_dist=True)
     print("Solution: ", sample)
     print("Solution energy:", energy)
     
     valid = verify_solution(sample, adj_edges)
     print("Solution validity: ", valid)
     
-    print("Compressed solution: ", compress_solution(sample))
+    compressed = compress_solution(sample)
+    print("Compressed solution: ", compressed)
+    graph, filename = build_graph(sample, adj_nodes, adj_edges, NURSES)
+    graph_compressed, filename_compressed = build_compact_graph(compressed, adj_nodes, adj_edges, NURSES)
+    graph.render(filename)
+    graph_compressed.render(filename_compressed)
     
     
     
